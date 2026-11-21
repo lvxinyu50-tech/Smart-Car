@@ -13,6 +13,7 @@ float steer_out = SERVO_PWMMID;
  * These gains still use the existing 5 ms control interval.
  */
 #define SERVO_GAIN_SCALE (SERVO_PWM_FREQ / 300.0f)
+#define SERVO_MAX_STEP_PER_5MS 4.0f  /* PWM duty counts per steering update. */
 
 ServoPID ERROR_steer = {
     16.29f * SERVO_GAIN_SCALE,
@@ -33,6 +34,8 @@ void servo_init(void)
 
 void steer_control(void)
 {
+    const float last_duty = steer_out;
+    const uint8 running = (SystemData.Stop == 0);
     int image_error = ImageStatus.Det_True - ImageStatus.MiddleLine;
     int16 error;
 
@@ -54,7 +57,7 @@ void steer_control(void)
     previous_error = error;
 
     /* The target project uses Stop == 0 instead of start_flag == 1. */
-    if (SystemData.Stop == 0)
+    if (running)
     {
         steer_out = Steer_PWM_mid - Err_steer;
     }
@@ -70,6 +73,13 @@ void steer_control(void)
     if (steer_out > Steer_PWM_Lmax)
     {
         steer_out = Steer_PWM_Lmax;
+    }
+    if (running)
+    {
+        if (steer_out > last_duty + SERVO_MAX_STEP_PER_5MS)
+            steer_out = last_duty + SERVO_MAX_STEP_PER_5MS;
+        else if (steer_out < last_duty - SERVO_MAX_STEP_PER_5MS)
+            steer_out = last_duty - SERVO_MAX_STEP_PER_5MS;
     }
     pwm_set_duty(Steer_GPIO, (uint32)steer_out);
 }
